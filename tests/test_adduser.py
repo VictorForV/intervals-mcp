@@ -89,6 +89,32 @@ class TestAddUser:
         assert config.load_users(path)[0].name == 'we"ird'
 
 
+class TestMain:
+    def test_runs_end_to_end_without_a_host_configured(self, tmp_path, monkeypatch, capsys):
+        """Regression test: main() builds its argparser at call time, and a
+        missing `import os` there only shows up when main() actually runs -
+        add_user() alone can't catch it."""
+        monkeypatch.delenv("MCP_DOMAIN", raising=False)
+        path = tmp_path / "users.toml"
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "intervals-mcp-adduser",
+                "--name",
+                "alex",
+                "--athlete-id",
+                "i111",
+                "--api-key",
+                "k1",
+                "--users-file",
+                str(path),
+            ],
+        )
+
+        assert adduser.main() == 0
+        assert "token:" in capsys.readouterr().out
+
+
 class TestConnectorUrl:
     def test_builds_the_sse_url_a_connector_expects(self):
         url = adduser.connector_url("example.com", "tok123")

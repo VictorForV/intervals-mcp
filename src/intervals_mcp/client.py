@@ -64,6 +64,14 @@ class IntervalsClient:
             raise IntervalsError(
                 f"Invalid path {path!r}: pass query arguments in params, not in the path."
             )
+        if httpx.URL(path).is_absolute_url:
+            # httpx.Client only merges *relative* paths onto base_url: an
+            # absolute URL here would replace it outright, sending this
+            # client's Basic Auth credentials (the athlete's API key) to
+            # whatever host the caller named.
+            raise IntervalsError(
+                f"Invalid path {path!r}: must be relative to {BASE_URL}, not an absolute URL."
+            )
 
         clean = {k: v for k, v in (params or {}).items() if v is not None}
         last_reason = ""

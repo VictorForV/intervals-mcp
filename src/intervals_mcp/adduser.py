@@ -7,6 +7,7 @@ duplicate or guessable token.
 """
 
 import argparse
+import os
 import pathlib
 import sys
 
