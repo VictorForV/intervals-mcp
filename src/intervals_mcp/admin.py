@@ -15,6 +15,44 @@ from dotenv import dotenv_values, load_dotenv
 from . import config, users
 
 
+class _Ansi:
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    CYAN = "\033[36m"
+
+
+def _color(text: str, *codes: str, stream=sys.stdout) -> str:
+    """Wrap ``text`` in ANSI codes, unless the stream isn't a terminal or the
+    user opted out with NO_COLOR (https://no-color.org)."""
+    if os.environ.get("NO_COLOR") or not stream.isatty():
+        return text
+    return "".join(codes) + text + _Ansi.RESET
+
+
+def _heading(text: str) -> str:
+    return _color(text, _Ansi.BOLD, _Ansi.CYAN)
+
+
+def _ok(text: str) -> str:
+    return _color(text, _Ansi.GREEN)
+
+
+def _warn(text: str) -> str:
+    return _color(text, _Ansi.YELLOW)
+
+
+def _err(text: str) -> str:
+    return _color(text, _Ansi.RED, stream=sys.stderr)
+
+
+def _muted(text: str) -> str:
+    return _color(text, _Ansi.DIM)
+
+
 def _prompt(label: str, default: str = "") -> str:
     suffix = f" [{default}]" if default else ""
     value = input(f"{label}{suffix}: ").strip()
@@ -36,15 +74,15 @@ def _host(value: str | None) -> str:
 
 def _print_links(user: config.UserConfig, host: str) -> None:
     links = users.endpoint_urls(host, user.token)
-    print(f"\nConnector URLs for {user.name} (treat both as passwords):")
-    print(f"  Streamable HTTP (recommended): {links['http']}")
-    print(f"  Legacy SSE (compatibility):    {links['sse']}")
-    print("\nClaude Code:")
-    print(f"  claude mcp add --transport http intervals-{user.name} {links['http']}")
+    print(f"\n{_heading(f'Connector URLs for {user.name}')} {_warn('(treat both as passwords)')}:")
+    print(f"  Streamable HTTP (recommended): {_warn(links['http'])}")
+    print(f"  Legacy SSE (compatibility):    {_warn(links['sse'])}")
+    print(f"\n{_muted('Claude Code:')}")
+    print(f"  claude mcp add --transport http intervals-{user.name} {_warn(links['http'])}")
 
 
 def _restart_hint() -> None:
-    print("\nApply the change with: docker compose restart mcp")
+    print(_muted("\nApply the change with: docker compose restart mcp"))
 
 
 def _load(path: pathlib.Path) -> list[config.UserConfig]:
@@ -56,7 +94,7 @@ def add(path: pathlib.Path, host: str, *, name: str = "", athlete_id: str = "", 
     athlete_id = athlete_id or _prompt("Intervals.icu athlete ID (for example i123456)")
     api_key = api_key or _secret("Intervals.icu API key (input hidden)")
     user = users.add_user(path, name, athlete_id, api_key)
-    print(f"\nAdded {user.name} ({user.athlete_id}).")
+    print(_ok(f"\nAdded {user.name} ({user.athlete_id})."))
     if host:
         _print_links(user, host)
     else:
@@ -69,7 +107,7 @@ def list_users(path: pathlib.Path) -> None:
     if not entries:
         print("No athletes are configured.")
         return
-    print("\nConfigured athletes (secrets are hidden):")
+    print(f"\n{_heading('Configured athletes')} {_muted('(secrets are hidden)')}:")
     for index, user in enumerate(entries, 1):
         print(f"  {index}. {user.name} ({user.athlete_id})")
 
@@ -104,14 +142,14 @@ def edit(path: pathlib.Path, current_name: str = "") -> None:
         athlete_id=athlete_id,
         api_key=api_key or None,
     )
-    print(f"Updated {updated.name} ({updated.athlete_id}).")
+    print(_ok(f"Updated {updated.name} ({updated.athlete_id})."))
     _restart_hint()
 
 
 def rotate(path: pathlib.Path, host: str, name: str = "") -> None:
     current = users.find_user(path, name) if name else _choose_user(path)
     updated = users.update_user(path, current.name, rotate_token=True)
-    print(f"Rotated the access token for {updated.name}. Old URLs no longer work after restart.")
+    print(_ok(f"Rotated the access token for {updated.name}.") + " Old URLs no longer work after restart.")
     if host:
         _print_links(updated, host)
     _restart_hint()
@@ -120,10 +158,10 @@ def rotate(path: pathlib.Path, host: str, name: str = "") -> None:
 def remove(path: pathlib.Path, name: str = "", yes: bool = False) -> None:
     current = users.find_user(path, name) if name else _choose_user(path)
     if not yes and _prompt(f"Type {current.name!r} to confirm removal") != current.name:
-        print("Removal cancelled.")
+        print(_warn("Removal cancelled."))
         return
     users.remove_user(path, current.name)
-    print(f"Removed {current.name}. Their connector URLs no longer work after restart.")
+    print(_ok(f"Removed {current.name}.") + " Their connector URLs no longer work after restart.")
     _restart_hint()
 
 
@@ -159,7 +197,7 @@ def initial_setup(path: pathlib.Path, host: str = "") -> None:
     if not env_path.exists():
         env_path.write_text(f"MCP_DOMAIN={host}\nMCP_ALLOWED_HOSTS={host}\n")
         env_path.chmod(0o600)
-        print(f"Created {env_path} with owner-only permissions.")
+        print(_ok(f"Created {env_path} with owner-only permissions."))
     add(path, host)
     if _prompt("Build and start the service now? (Y/n)", "Y").lower() in {"y", "yes"}:
         _compose("up", "-d", "--build")
@@ -180,25 +218,25 @@ def menu(path: pathlib.Path, host: str) -> int:
         "11": ("Recent logs", lambda: _compose("logs", "--tail", "100", "mcp")),
     }
     while True:
-        print("\nIntervals MCP Manager\n")
+        print(f"\n{_heading('Intervals MCP Manager')}\n")
         for key, (label, _) in actions.items():
-            print(f" {key:>2}. {label}")
-        print("  0. Exit")
+            print(f" {_muted(f'{key:>2}.')} {label}")
+        print(f" {_muted(' 0.')} Exit")
         choice = _prompt("Choose an option")
         if choice == "0":
             return 0
         action = actions.get(choice)
         if not action:
-            print("Invalid option.")
+            print(_warn("Invalid option."))
             continue
         try:
             action[1]()
         except (users.UserError, config.ConfigError) as exc:
-            print(f"Error: {exc}", file=sys.stderr)
+            print(_err(f"Error: {exc}"), file=sys.stderr)
         except subprocess.CalledProcessError:
             # docker compose already printed its own diagnostic to stderr;
             # repeating its argv and exit code here would only add noise.
-            print("Error: docker compose failed (see the message above).", file=sys.stderr)
+            print(_err("Error: docker compose failed (see the message above)."), file=sys.stderr)
 
 
 def main() -> int:
@@ -239,7 +277,7 @@ def main() -> int:
         elif args.command == "remove":
             remove(args.users_file, args.name or "", args.yes)
     except (users.UserError, config.ConfigError) as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        print(_err(f"error: {exc}"), file=sys.stderr)
         return 1
     return 0
 
