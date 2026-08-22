@@ -95,6 +95,11 @@ if ! run_as_app_user bash -lc 'command -v uv >/dev/null 2>&1'; then
   run_as_app_user sh "${uv_installer}"
 fi
 
+# uv was just installed into ${APP_HOME}/.local/bin by a subprocess above,
+# which does not change this script's own PATH. Without this, manage.sh
+# (execed below) would not find uv and wrongly offer to install it again.
+export PATH="${APP_HOME}/.local/bin:${PATH}"
+
 info "Installing Intervals MCP in ${INSTALL_DIR}"
 if [[ -d "${INSTALL_DIR}/.git" ]]; then
   current_origin="$(run_as_app_user git -C "${INSTALL_DIR}" remote get-url origin 2>/dev/null || true)"
