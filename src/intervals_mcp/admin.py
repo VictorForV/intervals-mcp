@@ -193,8 +193,12 @@ def menu(path: pathlib.Path, host: str) -> int:
             continue
         try:
             action[1]()
-        except (users.UserError, config.ConfigError, subprocess.CalledProcessError) as exc:
+        except (users.UserError, config.ConfigError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
+        except subprocess.CalledProcessError:
+            # docker compose already printed its own diagnostic to stderr;
+            # repeating its argv and exit code here would only add noise.
+            print("Error: docker compose failed (see the message above).", file=sys.stderr)
 
 
 def main() -> int:
