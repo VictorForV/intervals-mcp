@@ -1,0 +1,13 @@
+{
+ "athlete": {
+  "id": "i000001",
+  "name": "Example Athlete",
+  "city": "Example City",
+  "state": "Example State",
+  "country": "XX",
+  "timezone": "UTC",
+  "sex": "M",
+  "bio": null,
+  "icu_coach": false
+ }
+}

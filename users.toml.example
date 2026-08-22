@@ -1,0 +1,8 @@
+# Copy to users.toml, one block per athlete. Keep it secret (mode 600).
+# Generate entries with: uv run intervals-mcp-adduser --name bob --athlete-id i222 --api-key <key>
+
+[[users]]
+name = "alex"
+athlete_id = "i123456"
+api_key = "the-athlete-own-intervals-icu-key"
+token = "at-least-20-url-safe-characters"

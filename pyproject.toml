@@ -1,0 +1,45 @@
+[project]
+name = "intervals-mcp"
+version = "0.1.0"
+description = "Read-only MCP server exposing one athlete's intervals.icu training data"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["intervals.icu", "mcp", "training", "fitness", "llm"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+]
+dependencies = [
+    "httpx>=0.28.1",
+    "mcp[cli]>=2.0.0",
+    "python-dotenv>=1.2.2",
+    "uvicorn>=0.52.1",
+]
+
+[project.scripts]
+# stdio, for a client that launches the server as a subprocess
+intervals-mcp = "intervals_mcp.server:main"
+# HTTP, for a remote client such as a ChatGPT connector
+intervals-mcp-http = "intervals_mcp.server:main_http"
+# Add an athlete to users.toml and print their connector URL
+intervals-mcp-adduser = "intervals_mcp.adduser:main"
+# Interactive administration panel (run without arguments for the menu)
+intervals-mcp-admin = "intervals_mcp.admin:main"
+
+[build-system]
+requires = ["uv_build>=0.11.11,<0.12.0"]
+build-backend = "uv_build"
+
+[project.urls]
+Homepage = "https://github.com/VictorForV/intervals-mcp"
+Repository = "https://github.com/VictorForV/intervals-mcp"
+Issues = "https://github.com/VictorForV/intervals-mcp/issues"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "respx>=0.23.1",
+]

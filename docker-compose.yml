@@ -1,0 +1,41 @@
+services:
+  mcp:
+    build: .
+    restart: unless-stopped
+    volumes:
+      # Multi-athlete configuration. When absent, the server falls back to the
+      # single athlete in the environment below.
+      - ./users.toml:/app/users.toml:ro
+    environment:
+      INTERVALS_API_KEY: ${INTERVALS_API_KEY:-}
+      INTERVALS_ATHLETE_ID: ${INTERVALS_ATHLETE_ID:-}
+      INTERVALS_MCP_TOKEN: ${INTERVALS_MCP_TOKEN:-}
+      # Hostnames the app answers to, for DNS-rebinding protection. Leave empty
+      # when reached through a tunnel whose hostname changes: the only ingress
+      # is the tunnel, and the secret path token is what guards the data.
+      INTERVALS_MCP_HOSTS: ${MCP_ALLOWED_HOSTS:-}
+      PORT: 8080
+    ports:
+      # Loopback only: public traffic arrives through Caddy, which terminates
+      # TLS. Handy for an SSH port-forward and for scripts/verify_http.py.
+      - "127.0.0.1:8080:8080"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - mcp
+    environment:
+      MCP_DOMAIN: ${MCP_DOMAIN:?set in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
