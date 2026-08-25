@@ -6,7 +6,9 @@ seven years of training data, so its behaviour is pinned down here.
 
 import asyncio
 
+import httpx
 import pytest
+import respx
 from starlette.testclient import TestClient
 
 from intervals_mcp import server
@@ -23,6 +25,7 @@ EXPECTED_TOOLS = {
     "get_activity_streams",
     "get_wellness",
     "get_training_readiness",
+    "get_training_load_chart",
     "get_events",
     "get_best_efforts",
     "get_gear",
@@ -65,6 +68,28 @@ class TestToolRegistration:
         activity = next(t for t in list_tools(mcp_server) if t.name == "get_activity")
 
         assert activity.input_schema["required"] == ["activity_id"]
+
+
+class TestToolExecution:
+    @respx.mock
+    def test_the_chart_tool_returns_an_image_content_block(self, mcp_server):
+        respx.get("https://intervals.icu/api/v1/athlete/i123/wellness").mock(
+            return_value=httpx.Response(
+                200,
+                json=[
+                    {"id": "2026-06-01", "ctl": 40, "atl": 30},
+                    {"id": "2026-06-15", "ctl": 45, "atl": 42},
+                ],
+            )
+        )
+
+        result = asyncio.run(mcp_server.call_tool("get_training_load_chart", {}))
+
+        assert len(result.content) == 1
+        block = result.content[0]
+        assert block.type == "image"
+        assert block.mime_type == "image/png"
+        assert block.data
 
 
 ONE_USER = [

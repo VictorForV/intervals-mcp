@@ -17,6 +17,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from mcp.server import MCPServer
+from mcp.server.mcpserver.utilities.types import Image
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
@@ -37,7 +38,9 @@ get_sport_settings for zones and FTP, get_wellness for fitness (CTL), fatigue
 (ATL) and ramp rate, and list_activities for what was actually done.
 get_training_readiness turns CTL/ATL/ramp rate and recent HRV into the
 qualitative read a coach would give -- fresh, overreaching, high risk -- so
-that read does not have to be inferred from raw numbers.
+that read does not have to be inferred from raw numbers. get_training_load_chart
+renders the same CTL/ATL/TSB history as a PNG when the shape of the curve
+matters more than the numbers.
 
 Date arguments are optional everywhere. They accept ISO dates (2026-08-01) and
 relative forms (today, -7d, -6w, -3m, -1y, +28d). Omit them to get sensible
@@ -195,6 +198,17 @@ def build_server(tools: IntervalsTools | None = None) -> MCPServer:
         more than 10% below baseline.
         """
         return tools.get_training_readiness(oldest=oldest, newest=newest)
+
+    @mcp.tool()
+    @guard
+    def get_training_load_chart(oldest: str | None = None, newest: str | None = None) -> Image:
+        """A PNG chart of CTL (fitness), ATL (fatigue) and TSB (form) over time.
+
+        Defaults to the last 90 days, the usual window for seeing a build and
+        a taper. Use this when a shape -- a spike, a plateau, a steady climb
+        -- says more than the numbers would on their own.
+        """
+        return Image(data=tools.get_training_load_chart(oldest=oldest, newest=newest), format="png")
 
     @mcp.tool()
     @guard

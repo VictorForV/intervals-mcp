@@ -8,7 +8,7 @@ import datetime
 from collections.abc import Callable
 from typing import Any
 
-from . import analytics, compact, dates
+from . import analytics, charts, compact, dates
 from .client import IntervalsClient
 
 CURVE_ENDPOINTS = {"hr": "hr-curves", "pace": "pace-curves", "power": "power-curves"}
@@ -123,6 +123,13 @@ class IntervalsTools:
         result = analytics.assess_readiness(raw)
         result["window"] = {"oldest": start, "newest": end}
         return result
+
+    def get_training_load_chart(self, oldest: str | None = None, newest: str | None = None) -> bytes:
+        # 90 days is the usual PMC window: long enough to see a build and a
+        # taper, short enough that daily wiggle is still legible.
+        start, end = self._window(oldest, newest, default_oldest="-90d")
+        raw = self._client.athlete_get("wellness", {"oldest": start, "newest": end})
+        return charts.render_pmc_chart(raw, title=f"Training load {start} to {end}")
 
     def get_events(self, oldest: str | None = None, newest: str | None = None) -> dict:
         # Events are plans, so the useful default window looks forward.

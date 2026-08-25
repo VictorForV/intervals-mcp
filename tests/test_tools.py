@@ -257,6 +257,37 @@ class TestTrainingReadiness:
         assert "error" in result
 
 
+class TestTrainingLoadChart:
+    @respx.mock
+    def test_defaults_to_ninety_days(self, tools):
+        route = respx.get(f"{BASE}/athlete/{ATHLETE}/wellness").mock(
+            return_value=httpx.Response(200, json=fixture("wellness"))
+        )
+
+        tools.get_training_load_chart()
+
+        assert route.calls.last.request.url.params["oldest"] == "2026-05-12"
+
+    @respx.mock
+    def test_returns_png_bytes(self, tools):
+        respx.get(f"{BASE}/athlete/{ATHLETE}/wellness").mock(
+            return_value=httpx.Response(200, json=fixture("wellness"))
+        )
+
+        result = tools.get_training_load_chart()
+
+        assert result[:8] == b"\x89PNG\r\n\x1a\n"
+
+    @respx.mock
+    def test_raises_when_the_window_has_no_usable_data(self, tools):
+        respx.get(f"{BASE}/athlete/{ATHLETE}/wellness").mock(
+            return_value=httpx.Response(200, json=[])
+        )
+
+        with pytest.raises(ValueError):
+            tools.get_training_load_chart()
+
+
 class TestEvents:
     @respx.mock
     def test_looks_forward_by_default_because_events_are_plans(self, tools):
