@@ -194,7 +194,8 @@ class IntervalsTools:
         curves = raw.get("list") or []
         if not curves:
             raise ValueError(f"No {kind} curve data for {sport_type} in this window.")
-        title = f"{sport_type} {kind} curve ({start} to {end})"
+        unit = " (min/km)" if kind == "pace" else ""
+        title = f"{sport_type} {kind} curve{unit} ({start} to {end})"
         return charts.render_curve_chart(curves[0], kind=kind, title=title)
 
     # --- escape hatch ----------------------------------------------------
