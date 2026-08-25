@@ -14,6 +14,8 @@ from .client import IntervalsClient
 CURVE_ENDPOINTS = {"hr": "hr-curves", "pace": "pace-curves", "power": "power-curves"}
 
 DEFAULT_STREAM_TYPES = "heartrate,velocity_smooth,altitude,cadence,watts"
+MIN_STREAM_POINTS = 2
+MAX_STREAM_POINTS = 2000
 
 
 class IntervalsTools:
@@ -109,6 +111,11 @@ class IntervalsTools:
         points: int = 200,
         full: bool = False,
     ) -> dict:
+        if not full and not (MIN_STREAM_POINTS <= points <= MAX_STREAM_POINTS):
+            raise ValueError(
+                f"points must be between {MIN_STREAM_POINTS} and {MAX_STREAM_POINTS} "
+                f"(or pass full=true for every sample), got {points}."
+            )
         raw = self._client.get(f"activity/{activity_id}/streams", {"types": types})
         return compact.compact_streams(raw, points=points, full=full)
 

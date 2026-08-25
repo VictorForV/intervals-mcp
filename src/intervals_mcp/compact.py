@@ -203,10 +203,22 @@ def pick(data: dict, fields: Sequence[str]) -> dict:
 
 
 def downsample(data: Sequence, points: int) -> list:
-    """Take ``points`` evenly spaced samples, always including first and last."""
+    """Take ``points`` evenly spaced samples, always including first and last.
+
+    points <= 0 and n <= points are different situations and must not share a
+    fallback: the former genuinely means "give me (almost) nothing", the
+    latter means "there isn't enough data to trim". Treating points < 2 as
+    "return everything" (the previous behaviour) turned a request for the
+    smallest possible reply into the largest one -- a payload-bomb footgun
+    for whatever asked for points=0 expecting exactly that.
+    """
     n = len(data)
-    if n <= points or points < 2:
+    if points <= 0:
+        return []
+    if n <= points:
         return list(data)
+    if points == 1:
+        return [data[0]]
     return [data[int(i * (n - 1) / (points - 1))] for i in range(points)]
 
 
@@ -292,9 +304,11 @@ def compact_streams(streams: Iterable[dict], points: int = 200, full: bool = Fal
         # coordinate or invent a longitude.
         if stream.get("type") == "latlng" and data and not _is_coordinate_pair(data[0]):
             entry["note"] = (
-                "intervals.icu returned latitude only for this stream, not "
-                "[lat, lon] pairs; longitude was not included in the response. "
-                "This is upstream API behaviour, not a downsampling artifact."
+                "intervals.icu's own API response for this stream already carries "
+                "latitude only, not [lat, lon] pairs; longitude is missing before "
+                "this tool ever sees the data. Verify directly with "
+                "intervals_get_raw(path='activity/{activity_id}/streams', "
+                "params={'types': 'latlng'}) -- no athlete segment in that path."
             )
         series.append(entry)
     returned = max((len(s["data"]) for s in series), default=0)

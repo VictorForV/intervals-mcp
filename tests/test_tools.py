@@ -204,6 +204,30 @@ class TestStreams:
 
         assert result["returned_points"] == 14019
 
+    def test_rejects_points_zero_before_making_a_request(self, tools):
+        with pytest.raises(ValueError, match="points"):
+            tools.get_activity_streams("i100000001", points=0)
+
+    def test_rejects_a_negative_points(self, tools):
+        with pytest.raises(ValueError, match="points"):
+            tools.get_activity_streams("i100000001", points=-1)
+
+    def test_rejects_points_above_the_cap(self, tools):
+        with pytest.raises(ValueError, match="points"):
+            tools.get_activity_streams("i100000001", points=100_000)
+
+    @respx.mock
+    def test_full_mode_ignores_the_points_bound(self, tools):
+        # full=true does not downsample at all, so an otherwise-invalid
+        # points value must not block it.
+        respx.get(f"{BASE}/activity/i100000001/streams").mock(
+            return_value=httpx.Response(200, json=fixture("activity_streams"))
+        )
+
+        result = tools.get_activity_streams("i100000001", points=0, full=True)
+
+        assert result["returned_points"] == 14019
+
 
 class TestWellness:
     @respx.mock

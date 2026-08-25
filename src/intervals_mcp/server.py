@@ -46,7 +46,8 @@ best-effort curve from get_best_efforts.
 Date arguments are optional everywhere. They accept ISO dates (2026-08-01) and
 relative forms (today, -7d, -6w, -3m, -1y, +28d). Omit them to get sensible
 defaults; every response echoes the window it used, so there is no need to guess
-today's date.
+today's date. If oldest ends up after newest, the two are swapped rather than
+returning an empty result -- the echoed window shows this happened.
 
 Responses are trimmed to meaningful fields and empty ones are dropped, so a run
 carries no power fields. Streams are downsampled by default; ask for full=true
@@ -166,9 +167,11 @@ def build_server(tools: IntervalsTools | None = None) -> MCPServer:
 
         types is a comma-separated list, for example heartrate, velocity_smooth,
         altitude, cadence, watts, temp, latlng. Returns `points` evenly spaced
-        samples per series plus min/mean/max over the whole series. The raw data
-        can exceed ten thousand samples per series, so pass full=true only when
-        the shape of every second genuinely matters.
+        samples per series plus min/mean/max over the whole series. points must
+        be between 2 and 2000. The raw data can exceed ten thousand samples per
+        series, so pass full=true only when the shape of every second genuinely
+        matters -- not a small `points` value, which is rejected rather than
+        silently answered with the full series.
 
         latlng sometimes comes back from intervals.icu as latitude only rather
         than [lat, lon] pairs; when that happens the series carries a note

@@ -57,6 +57,23 @@ class TestDownsample:
 
         assert result == [0, 24, 49, 74, 99]
 
+    def test_points_zero_returns_nothing_rather_than_everything(self):
+        # The previous `if n <= points or points < 2: return list(data)`
+        # treated points=0 as falling into "not enough points to trim" and
+        # handed back the full series -- the exact opposite of what a caller
+        # asking for zero points means.
+        result = compact.downsample(list(range(8667)), 0)
+
+        assert result == []
+
+    def test_negative_points_also_returns_nothing(self):
+        assert compact.downsample(list(range(100)), -5) == []
+
+    def test_points_one_returns_a_single_sample_not_everything(self):
+        result = compact.downsample(list(range(8667)), 1)
+
+        assert result == [0]
+
 
 class TestSummarizeSeries:
     def test_reports_min_mean_max(self):
