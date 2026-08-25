@@ -77,6 +77,20 @@ class TestRenderPmcChart:
         assert png_bytes[:8] == b"\x89PNG\r\n\x1a\n"
 
 
+class TestToPaceSecondsPerKm:
+    def test_converts_elapsed_time_to_pace_per_km(self):
+        # 1000m in 300s (5:00/km) and 5000m in 1200s (4:00/km).
+        result = charts._to_pace_seconds_per_km([(1000, 300), (5000, 1200)])
+
+        assert result == [(1000, 300.0), (5000, 240.0)]
+
+    def test_matches_the_reported_400m_time(self):
+        # 400m in 59s -> pace is 59 * 1000 / 400 = 147.5 s/km, i.e. 2:27/km.
+        (_distance, pace) = charts._to_pace_seconds_per_km([(400, 59)])[0]
+
+        assert round(pace, 1) == 147.5
+
+
 class TestRenderCurveChart:
     def _duration_curve(self):
         return {

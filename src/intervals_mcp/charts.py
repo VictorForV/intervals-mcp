@@ -181,6 +181,16 @@ def render_pmc_chart(days: Sequence[dict], title: str = "Training load (CTL / AT
     return _render_line_chart(series, x_ticks, title)
 
 
+def _to_pace_seconds_per_km(pairs: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Convert (distance_m, elapsed_s) points to (distance_m, seconds_per_km).
+
+    The API's pace curve stores elapsed time for each distance, not a pace.
+    Plotting elapsed time directly and labelling the axis "pace" is the
+    wrong quantity under the right name -- this is the actual conversion.
+    """
+    return [(x, v * 1000 / x) for x, v in pairs]
+
+
 def render_curve_chart(curve: dict, kind: str, title: str | None = None) -> bytes:
     """Render one best-effort curve (HR, power or pace) as a PNG.
 
@@ -202,7 +212,8 @@ def render_curve_chart(curve: dict, kind: str, title: str | None = None) -> byte
     if not pairs:
         raise ValueError("Curve has no plottable points.")
 
-    series = {kind: [(math.log10(x), v) for x, v in pairs]}
+    series_values = _to_pace_seconds_per_km(pairs) if kind == "pace" else pairs
+    series = {kind: [(math.log10(x), v) for x, v in series_values]}
 
     reference = CURVE_DURATIONS if by_duration else CURVE_DISTANCES
     x_min, x_max = pairs[0][0], pairs[-1][0]
@@ -213,10 +224,14 @@ def render_curve_chart(curve: dict, kind: str, title: str | None = None) -> byte
     ]
 
     if title is None:
-        unit = "duration" if by_duration else "distance"
-        title = f"{curve.get('label', kind)} {kind} curve by {unit}"
+        if kind == "pace":
+            title = f"{curve.get('label', 'pace')} pace curve (min/km) by distance"
+        else:
+            unit = "duration" if by_duration else "distance"
+            title = f"{curve.get('label', kind)} {kind} curve by {unit}"
 
-    # Pace curves store seconds elapsed; a coach reads m:ss, not raw seconds.
+    # y is now genuinely min:sec/km for pace, not raw elapsed seconds -- a
+    # coach reads m:ss either way, so the same formatter still applies.
     y_format = format_duration if kind == "pace" else (lambda v: f"{v:.0f}")
 
     # HR, power and pace are never negative; axis padding must not invent a
