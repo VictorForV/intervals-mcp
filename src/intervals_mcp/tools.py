@@ -186,9 +186,9 @@ class IntervalsTools:
     # --- escape hatch ----------------------------------------------------
 
     def intervals_get_raw(self, path: str, params: dict[str, Any] | None = None) -> Any:
-        """GET any v1 path and return the body unshaped.
+        """GET any v1 path and return the body unshaped, minus credentials/PII.
 
         ``{athlete}`` in the path expands to the configured athlete id.
         """
         path = path.replace("{athlete}", self._client.athlete_id)
-        return self._client.get(path, params)
+        return compact.redact_secrets(self._client.get(path, params))

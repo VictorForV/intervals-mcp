@@ -6,7 +6,9 @@ from one activity come to 363 KB. Every function here is pure so it can be
 tested against synthetic fixtures shaped like the live API.
 """
 
+import re
 from collections.abc import Iterable, Sequence
+from typing import Any
 
 # Fields worth showing for a completed activity. Power fields stay in the list
 # because the same server serves cycling; null stripping removes them for runs.
@@ -405,3 +407,41 @@ def compact_curves(payload: dict) -> dict:
             }
         )
     return {"curves": curves}
+
+
+# intervals_get_raw hands back whatever an arbitrary v1 GET path returns,
+# unshaped -- including account internals a coaching agent has no business
+# reading or repeating back: email, API keys, invitation links. Field
+# *names* survive redaction (so the response shape is still legible); only
+# values that look like credentials or PII are replaced.
+_SENSITIVE_KEY_MARKERS = (
+    "email",
+    "token",
+    "apikey",
+    "api_key",
+    "password",
+    "secret",
+    "credential",
+    "invite",
+    "auth",
+)
+_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+
+def _is_sensitive_key(key: str) -> bool:
+    lowered = key.lower()
+    return any(marker in lowered for marker in _SENSITIVE_KEY_MARKERS)
+
+
+def redact_secrets(value: Any) -> Any:
+    """Recursively replace credential- and PII-shaped values with a placeholder."""
+    if isinstance(value, dict):
+        return {
+            k: "[redacted]" if _is_sensitive_key(k) and v not in (None, "", []) else redact_secrets(v)
+            for k, v in value.items()
+        }
+    if isinstance(value, list):
+        return [redact_secrets(v) for v in value]
+    if isinstance(value, str) and _EMAIL_RE.match(value.strip()):
+        return "[redacted]"
+    return value

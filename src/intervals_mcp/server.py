@@ -135,10 +135,11 @@ def build_server(tools: IntervalsTools | None = None) -> MCPServer:
     @mcp.tool()
     @guard
     def get_activity(activity_id: str) -> dict:
-        """Full detail for one activity, by id from list_activities.
+        """One activity by id, in the same shape as a list_activities entry.
 
-        Adds fields the list view omits, including heart-rate time in zone,
-        calories, TRIMP and perceived effort where the athlete recorded it.
+        Use it when you already have an id (from list_activities, an event,
+        or the athlete) and want that one activity without re-listing a whole
+        window. It does not currently surface fields list_activities omits.
         """
         return tools.get_activity(activity_id)
 
@@ -295,6 +296,10 @@ def build_server(tools: IntervalsTools | None = None) -> MCPServer:
         for example "athlete/{athlete}/activities"; "{athlete}" expands to the
         configured athlete id. Pass query arguments in params, not in the path.
         This is still read-only.
+
+        Field names are returned as-is, but values that look like credentials
+        or personal contact info -- email, API keys, tokens, invitation links
+        -- are replaced with "[redacted]" wherever they appear in the payload.
         """
         return tools.intervals_get_raw(path, params)
 

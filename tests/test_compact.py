@@ -396,3 +396,52 @@ class TestCompactSportSettings:
         shaped = len(json.dumps(compact.compact_sport_settings(sport_settings)))
 
         assert shaped < raw / 2
+
+
+class TestRedactSecrets:
+    def test_redacts_an_email_shaped_string_regardless_of_key_name(self):
+        result = compact.redact_secrets({"contact": "alex@example.com"})
+
+        assert result["contact"] == "[redacted]"
+
+    def test_redacts_values_under_sensitive_key_names(self):
+        payload = {
+            "email": "alex@example.com",
+            "api_key": "abc123",
+            "apikey": "abc123",
+            "password": "hunter2",
+            "secret": "shh",
+            "invite_token": "xyz",
+            "auth_header": "Bearer xyz",
+        }
+
+        result = compact.redact_secrets(payload)
+
+        assert all(v == "[redacted]" for v in result.values())
+
+    def test_keeps_field_names_and_ordinary_values_intact(self):
+        result = compact.redact_secrets({"id": "i123", "name": "Alex", "ftp": 250})
+
+        assert result == {"id": "i123", "name": "Alex", "ftp": 250}
+
+    def test_does_not_redact_a_null_or_empty_sensitive_field(self):
+        result = compact.redact_secrets({"api_key": None, "token": ""})
+
+        assert result == {"api_key": None, "token": ""}
+
+    def test_recurses_into_nested_dicts_and_lists(self):
+        payload = {
+            "athlete": {"email": "alex@example.com", "id": "i123"},
+            "connections": [{"token": "abc"}, {"token": "def"}],
+        }
+
+        result = compact.redact_secrets(payload)
+
+        assert result["athlete"]["email"] == "[redacted]"
+        assert result["athlete"]["id"] == "i123"
+        assert all(c["token"] == "[redacted]" for c in result["connections"])
+
+    def test_leaves_a_non_dict_payload_alone(self):
+        assert compact.redact_secrets([1, 2, 3]) == [1, 2, 3]
+        assert compact.redact_secrets("hello") == "hello"
+        assert compact.redact_secrets(None) is None

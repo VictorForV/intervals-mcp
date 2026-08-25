@@ -24,7 +24,8 @@ in an athlete's Intervals.icu account.
 - PNG charts: CTL/ATL/TSB over time, and best-effort curves (HR, pace, power)
   by duration or distance -- for when the shape says more than the numbers.
 - Planned events, best-effort curves, gear, and the workout library.
-- Additional Intervals.icu v1 `GET` endpoints through a read-only raw tool.
+- Additional Intervals.icu v1 `GET` endpoints through a read-only raw tool,
+  which redacts anything that looks like a credential or an email address.
 
 Large responses are compacted before they reach the model. Empty fields are
 dropped, streams are downsampled, and summaries use the full data series.

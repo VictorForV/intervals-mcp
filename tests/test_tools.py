@@ -448,3 +448,18 @@ class TestRawEscapeHatch:
         tools.intervals_get_raw("athlete/{athlete}/wellness")
 
         assert route.called
+
+    @respx.mock
+    def test_redacts_credentials_and_email_from_the_raw_body(self, tools):
+        respx.get(f"{BASE}/athlete/{ATHLETE}/profile").mock(
+            return_value=httpx.Response(
+                200,
+                json={"athlete": {"id": "i123", "email": "alex@example.com", "api_key": "abc"}},
+            )
+        )
+
+        result = tools.intervals_get_raw("athlete/i123/profile")
+
+        assert result["athlete"]["id"] == "i123"
+        assert result["athlete"]["email"] == "[redacted]"
+        assert result["athlete"]["api_key"] == "[redacted]"
