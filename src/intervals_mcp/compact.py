@@ -208,11 +208,34 @@ def downsample(data: Sequence, points: int) -> list:
     return [data[int(i * (n - 1) / (points - 1))] for i in range(points)]
 
 
+def _is_coordinate_pair(value: object) -> bool:
+    return (
+        isinstance(value, (list, tuple))
+        and len(value) == 2
+        and all(isinstance(v, (int, float)) for v in value)
+    )
+
+
 def summarize_series(data: Iterable) -> dict:
-    """Min/mean/max over a stream, ignoring the nulls intervals.icu emits."""
+    """Min/mean/max over a scalar stream, ignoring the nulls intervals.icu emits.
+
+    latlng is not a scalar stream: each sample is a [lat, lon] pair, for which
+    min/mean/max are meaningless (and summing pairs outright crashes). A
+    bounding box is the useful summary there instead.
+    """
     values = [v for v in data if v is not None]
     if not values:
         return {"min": None, "mean": None, "max": None, "points": 0}
+    if _is_coordinate_pair(values[0]):
+        lats = [v[0] for v in values]
+        lons = [v[1] for v in values]
+        return {
+            "lat_min": min(lats),
+            "lat_max": max(lats),
+            "lon_min": min(lons),
+            "lon_max": max(lons),
+            "points": len(values),
+        }
     return {
         "min": min(values),
         "mean": round(sum(values) / len(values), 2),

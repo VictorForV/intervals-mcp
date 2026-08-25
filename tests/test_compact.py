@@ -84,6 +84,22 @@ class TestSummarizeSeries:
 
         assert result["mean"] == 1.5
 
+    def test_summarizes_a_latlng_stream_as_a_bounding_box_instead_of_crashing(self):
+        result = compact.summarize_series([[55.751, 37.618], [55.753, 37.620], [55.752, 37.615]])
+
+        assert result == {
+            "lat_min": 55.751,
+            "lat_max": 55.753,
+            "lon_min": 37.615,
+            "lon_max": 37.620,
+            "points": 3,
+        }
+
+    def test_ignores_nulls_in_a_latlng_stream(self):
+        result = compact.summarize_series([[55.751, 37.618], None, [55.752, 37.619]])
+
+        assert result["points"] == 2
+
 
 class TestPaceFromSpeed:
     def test_converts_metres_per_second_to_pace_per_kilometre(self):
@@ -179,6 +195,34 @@ class TestCompactStreams:
 
         assert raw > 200_000, "fixture changed; revisit this assertion"
         assert shaped < raw / 20
+
+    def test_handles_a_latlng_stream_without_crashing(self, activity_streams):
+        streams = [
+            *activity_streams,
+            {
+                "type": "latlng",
+                "data": [[55.751, 37.618], [55.752, 37.619], [55.753, 37.620]],
+            },
+        ]
+
+        result = compact.compact_streams(streams, points=200)
+
+        latlng = next(s for s in result["series"] if s["type"] == "latlng")
+        assert latlng["data"] == [[55.751, 37.618], [55.752, 37.619], [55.753, 37.620]]
+        assert latlng["summary"]["lat_min"] == 55.751
+        assert latlng["summary"]["lon_max"] == 37.620
+
+    def test_downsamples_a_latlng_stream_as_whole_pairs(self):
+        pairs = [[55.7 + i * 0.001, 37.6 + i * 0.001] for i in range(1000)]
+        streams = [{"type": "latlng", "data": pairs}]
+
+        result = compact.compact_streams(streams, points=10)
+
+        latlng = result["series"][0]
+        assert len(latlng["data"]) == 10
+        assert all(len(point) == 2 for point in latlng["data"])
+        assert latlng["data"][0] == pairs[0]
+        assert latlng["data"][-1] == pairs[-1]
 
 
 class TestCompactWellness:
