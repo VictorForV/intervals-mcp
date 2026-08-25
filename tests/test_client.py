@@ -202,6 +202,77 @@ class TestRetry:
         assert route.call_count == 1
 
 
+class TestCaching:
+    @respx.mock
+    def test_a_second_identical_request_does_not_hit_the_network(self):
+        client = IntervalsClient(Config(api_key="testkey", athlete_id="i123"), backoff_base=0)
+        route = respx.get(f"{BASE}/athlete/i123/profile").mock(
+            return_value=httpx.Response(200, json={"athlete": {"id": "i123"}})
+        )
+
+        first = client.get("athlete/i123/profile")
+        second = client.get("athlete/i123/profile")
+
+        assert first == second == {"athlete": {"id": "i123"}}
+        assert route.call_count == 1
+
+    @respx.mock
+    def test_different_params_are_cached_separately(self):
+        client = IntervalsClient(Config(api_key="testkey", athlete_id="i123"), backoff_base=0)
+        route = respx.get(f"{BASE}/athlete/i123/activities").mock(
+            return_value=httpx.Response(200, json=[])
+        )
+
+        client.get("athlete/i123/activities", {"oldest": "2026-01-01"})
+        client.get("athlete/i123/activities", {"oldest": "2026-02-01"})
+
+        assert route.call_count == 2
+
+    @respx.mock
+    def test_an_error_response_is_not_cached(self):
+        client = IntervalsClient(Config(api_key="testkey", athlete_id="i123"), backoff_base=0)
+        route = respx.get(f"{BASE}/athlete/i123/profile").mock(return_value=httpx.Response(404))
+
+        for _ in range(2):
+            with pytest.raises(IntervalsError):
+                client.get("athlete/i123/profile")
+
+        assert route.call_count == 2
+
+    @respx.mock
+    def test_a_request_past_the_ttl_hits_the_network_again(self):
+        now = [0.0]
+        client = IntervalsClient(
+            Config(api_key="testkey", athlete_id="i123"),
+            backoff_base=0,
+            cache_ttl=60,
+            clock=lambda: now[0],
+        )
+        route = respx.get(f"{BASE}/athlete/i123/profile").mock(
+            return_value=httpx.Response(200, json={"ok": True})
+        )
+
+        client.get("athlete/i123/profile")
+        now[0] += 60
+        client.get("athlete/i123/profile")
+
+        assert route.call_count == 2
+
+    @respx.mock
+    def test_cache_ttl_zero_disables_caching(self):
+        client = IntervalsClient(
+            Config(api_key="testkey", athlete_id="i123"), backoff_base=0, cache_ttl=0
+        )
+        route = respx.get(f"{BASE}/athlete/i123/profile").mock(
+            return_value=httpx.Response(200, json={"ok": True})
+        )
+
+        client.get("athlete/i123/profile")
+        client.get("athlete/i123/profile")
+
+        assert route.call_count == 2
+
+
 class TestAthleteHelpers:
     @respx.mock
     def test_expands_the_configured_athlete_into_a_path(self, client):

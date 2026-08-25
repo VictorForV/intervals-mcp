@@ -6,15 +6,21 @@ looks natural, fails with 401 — hence the explicit message on that path.
 """
 
 import time
+from collections.abc import Callable
 from typing import Any
 
 import httpx
 
+from .cache import MISS, TTLCache
 from .config import Config
 
 BASE_URL = "https://intervals.icu/api/v1"
 ATTEMPTS = 3
 TIMEOUT = 30.0
+# Training data does not change second to second, so a short cache absorbs the
+# repeated reads one coaching conversation makes without risking staleness
+# across sessions.
+CACHE_TTL = 60.0
 
 
 class IntervalsError(Exception):
@@ -39,10 +45,13 @@ class IntervalsClient:
         timeout: float = TIMEOUT,
         attempts: int = ATTEMPTS,
         backoff_base: float = 0.5,
+        cache_ttl: float = CACHE_TTL,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._config = config
         self._attempts = attempts
         self._backoff_base = backoff_base
+        self._cache = TTLCache(cache_ttl, clock=clock)
         self._client = httpx.Client(
             base_url=BASE_URL,
             auth=("API_KEY", config.api_key),
@@ -74,6 +83,11 @@ class IntervalsClient:
             )
 
         clean = {k: v for k, v in (params or {}).items() if v is not None}
+        cache_key = (path, tuple(sorted(clean.items())))
+        cached = self._cache.get(cache_key)
+        if cached is not MISS:
+            return cached
+
         last_reason = ""
 
         for attempt in range(1, self._attempts + 1):
@@ -83,7 +97,9 @@ class IntervalsClient:
                 last_reason = f"{type(exc).__name__}: {exc}"
             else:
                 if response.status_code < 400:
-                    return response.json()
+                    body = response.json()
+                    self._cache.set(cache_key, body)
+                    return body
                 if response.status_code < 500:
                     raise self._client_error(response, path)
                 last_reason = f"HTTP {response.status_code}"
