@@ -224,6 +224,30 @@ class TestCompactStreams:
         assert latlng["data"][0] == pairs[0]
         assert latlng["data"][-1] == pairs[-1]
 
+    def test_flags_a_latitude_only_latlng_stream_instead_of_pretending_it_is_fine(self):
+        # Observed upstream behaviour: intervals.icu sometimes returns bare
+        # numbers under type "latlng" instead of [lat, lon] pairs.
+        streams = [{"type": "latlng", "data": [55.68, 55.681, 55.682]}]
+
+        result = compact.compact_streams(streams, points=10)
+
+        latlng = result["series"][0]
+        assert "note" in latlng
+        assert "longitude" in latlng["note"]
+        # It is still a scalar summary, not a bogus bounding box.
+        assert latlng["summary"]["mean"] is not None
+
+    def test_does_not_flag_a_proper_latlng_stream_of_pairs(self, activity_streams):
+        streams = [
+            *activity_streams,
+            {"type": "latlng", "data": [[55.751, 37.618], [55.752, 37.619]]},
+        ]
+
+        result = compact.compact_streams(streams, points=10)
+
+        latlng = next(s for s in result["series"] if s["type"] == "latlng")
+        assert "note" not in latlng
+
 
 class TestCompactWellness:
     def test_drops_fields_that_are_null_for_every_day(self, wellness_days):

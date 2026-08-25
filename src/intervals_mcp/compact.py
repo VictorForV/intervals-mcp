@@ -278,13 +278,23 @@ def compact_streams(streams: Iterable[dict], points: int = 200, full: bool = Fal
     series = []
     for stream in streams:
         data = stream.get("data") or []
-        series.append(
-            {
-                "type": stream.get("type"),
-                "summary": summarize_series(data),
-                "data": list(data) if full else downsample(data, points),
-            }
-        )
+        entry = {
+            "type": stream.get("type"),
+            "summary": summarize_series(data),
+            "data": list(data) if full else downsample(data, points),
+        }
+        # Despite its name, intervals.icu's latlng stream sometimes carries only
+        # latitude as a flat number per sample rather than [lat, lon] pairs --
+        # observed behaviour of the upstream API, not something this tool can
+        # fix. Flag it so the agent does not mistake a bare number for a full
+        # coordinate or invent a longitude.
+        if stream.get("type") == "latlng" and data and not _is_coordinate_pair(data[0]):
+            entry["note"] = (
+                "intervals.icu returned latitude only for this stream, not "
+                "[lat, lon] pairs; longitude was not included in the response. "
+                "This is upstream API behaviour, not a downsampling artifact."
+            )
+        series.append(entry)
     returned = max((len(s["data"]) for s in series), default=0)
     result = {
         "original_points": original,

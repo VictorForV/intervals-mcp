@@ -168,6 +168,10 @@ def build_server(tools: IntervalsTools | None = None) -> MCPServer:
         samples per series plus min/mean/max over the whole series. The raw data
         can exceed ten thousand samples per series, so pass full=true only when
         the shape of every second genuinely matters.
+
+        latlng sometimes comes back from intervals.icu as latitude only rather
+        than [lat, lon] pairs; when that happens the series carries a note
+        saying so instead of a silently wrong coordinate.
         """
         return tools.get_activity_streams(
             activity_id, types=types, points=points, full=full
