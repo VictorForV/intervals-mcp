@@ -14,6 +14,36 @@ def _days():
     ]
 
 
+class TestNiceTicks:
+    def test_produces_round_step_values(self):
+        ticks = charts._nice_ticks(0, 97, target_count=5)
+
+        steps = {round(b - a, 6) for a, b in zip(ticks, ticks[1:], strict=False)}
+        assert steps == {50.0}
+        assert ticks[-1] >= 97
+
+    def test_spans_at_least_the_requested_range(self):
+        ticks = charts._nice_ticks(3, 42, target_count=5)
+
+        assert ticks[0] <= 3
+        assert ticks[-1] >= 42
+
+    def test_a_floor_clamps_the_lowest_tick(self):
+        ticks = charts._nice_ticks(-805, 9564, target_count=5, floor=0)
+
+        assert min(ticks) == 0
+        assert ticks[-1] >= 9564
+
+    def test_without_a_floor_negative_ticks_are_allowed(self):
+        # TSB legitimately goes negative, so the PMC chart must not clamp it.
+        ticks = charts._nice_ticks(-30, 20, target_count=5)
+
+        assert min(ticks) < 0
+
+    def test_a_single_point_range_does_not_crash(self):
+        assert charts._nice_ticks(10, 10, target_count=5) == [10]
+
+
 class TestRenderPmcChart:
     def test_returns_a_valid_png_of_the_expected_size(self):
         png_bytes = charts.render_pmc_chart(_days())
@@ -97,3 +127,23 @@ class TestRenderCurveChart:
         png_bytes = charts.render_curve_chart(self._duration_curve(), kind="power")
 
         assert png_bytes[:8] == b"\x89PNG\r\n\x1a\n"
+
+    def test_pace_axis_never_goes_negative(self):
+        # Reported live: a pace curve spanning ~1min to ~2.5h produced a
+        # padded axis low of about -805s, which format_duration rendered as
+        # a nonsense "-1:46:35" gridline label.
+        curve = {
+            "distance": [400, 1000, 5000, 10000, 21097.5, 42195],
+            "values": [59, 237, 1221, 3000, 8518, 17222],
+        }
+
+        y_ticks = charts._nice_ticks(
+            *charts._padded_range(
+                [v for _, v in sorted(zip(curve["distance"], curve["values"], strict=True))]
+            ),
+            charts.Y_GRIDLINES,
+            floor=0,
+        )
+
+        assert all(tick >= 0 for tick in y_ticks)
+        assert all("-" not in charts.format_duration(tick) for tick in y_ticks)

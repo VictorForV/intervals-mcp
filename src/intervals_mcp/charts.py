@@ -45,11 +45,47 @@ def _padded_range(values: Sequence[float]) -> tuple[float, float]:
     return lo - pad, hi + pad
 
 
+def _nice_step(raw_step: float) -> float:
+    """Round a raw axis step up to 1, 2 or 5 times a power of ten.
+
+    That is what makes gridlines land on numbers a human reads cleanly (2:00,
+    2:30, 3:00) instead of whatever a straight linear split happens to produce.
+    """
+    if raw_step <= 0:
+        return 1.0
+    magnitude = 10 ** math.floor(math.log10(raw_step))
+    residual = raw_step / magnitude
+    nice = 1 if residual <= 1 else 2 if residual <= 2 else 5 if residual <= 5 else 10
+    return nice * magnitude
+
+
+def _nice_ticks(lo: float, hi: float, target_count: int, floor: float | None = None) -> list[float]:
+    """Gridline values on a round step, spanning at least [lo, hi].
+
+    ``floor`` clamps the lowest tick (e.g. 0 for a quantity that cannot
+    legitimately go negative, such as a duration or a heart rate) rather than
+    letting axis padding push it below a value that would be nonsensical.
+    """
+    if hi <= lo:
+        return [lo]
+    step = _nice_step((hi - lo) / max(target_count - 1, 1))
+    start = math.floor(lo / step) * step
+    if floor is not None:
+        start = max(start, floor)
+    ticks = [start]
+    while ticks[-1] < hi - step * 1e-9:
+        ticks.append(ticks[-1] + step)
+        if len(ticks) > target_count * 3:  # safety valve against a pathological step
+            break
+    return ticks
+
+
 def _render_line_chart(
     series: dict[str, list[tuple[float, float]]],
     x_ticks: Sequence[tuple[float, str]],
     title: str,
     y_format: Callable[[float], str] = lambda v: f"{v:.0f}",
+    y_floor: float | None = None,
 ) -> bytes:
     """Draw one or more (x, y) series onto a common canvas and return PNG bytes.
 
@@ -68,7 +104,9 @@ def _render_line_chart(
     x_lo, x_hi = min(xs), max(xs)
     if x_hi == x_lo:
         x_lo, x_hi = x_lo - 1, x_hi + 1
-    y_lo, y_hi = _padded_range(ys)
+    padded_lo, padded_hi = _padded_range(ys)
+    y_ticks = _nice_ticks(padded_lo, padded_hi, Y_GRIDLINES, floor=y_floor)
+    y_lo, y_hi = y_ticks[0], y_ticks[-1]
 
     image = PILImage.new("RGB", (WIDTH, HEIGHT), BACKGROUND)
     draw = ImageDraw.Draw(image)
@@ -79,10 +117,8 @@ def _render_line_chart(
 
     draw.text((MARGIN_LEFT, 8), title, fill=TEXT, font=font)
 
-    for i in range(Y_GRIDLINES):
-        fraction = i / (Y_GRIDLINES - 1)
-        y = plot_bottom - fraction * (plot_bottom - plot_top)
-        value = y_lo + fraction * (y_hi - y_lo)
+    for value in y_ticks:
+        y = _scale(value, y_lo, y_hi, plot_bottom, plot_top)
         draw.line([(plot_left, y), (plot_right, y)], fill=GRID)
         draw.text((4, y - 6), y_format(value), fill=TEXT, font=font)
 
@@ -183,4 +219,6 @@ def render_curve_chart(curve: dict, kind: str, title: str | None = None) -> byte
     # Pace curves store seconds elapsed; a coach reads m:ss, not raw seconds.
     y_format = format_duration if kind == "pace" else (lambda v: f"{v:.0f}")
 
-    return _render_line_chart(series, x_ticks, title, y_format=y_format)
+    # HR, power and pace are never negative; axis padding must not invent a
+    # negative gridline (and, for pace, a nonsense "-1:45:46" label).
+    return _render_line_chart(series, x_ticks, title, y_format=y_format, y_floor=0)
