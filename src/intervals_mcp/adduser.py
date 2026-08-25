@@ -13,7 +13,6 @@ import sys
 
 from . import config, users
 
-
 AddUserError = users.UserError
 
 

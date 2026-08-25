@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import pathlib
 import tempfile
@@ -71,10 +72,8 @@ def save_users(path: pathlib.Path, users: list[config.UserConfig]) -> None:
         os.replace(temporary, path)
         path.chmod(0o600)
     except BaseException:
-        try:
+        with contextlib.suppress(FileNotFoundError):
             os.unlink(temporary)
-        except FileNotFoundError:
-            pass
         raise
 
 

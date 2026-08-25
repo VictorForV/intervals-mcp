@@ -42,4 +42,16 @@ Issues = "https://github.com/VictorForV/intervals-mcp/issues"
 dev = [
     "pytest>=9.1.1",
     "respx>=0.23.1",
+    "ruff>=0.16.4",
 ]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+# The client resolves `today` through an injectable callable specifically so
+# tests can freeze it (see IntervalsTools.__init__); flake8-datetimez wants
+# every date/time call to carry a timezone, which does not apply here.
+ignore = ["DTZ"]

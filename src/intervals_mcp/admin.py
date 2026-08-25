@@ -6,9 +6,9 @@ import argparse
 import getpass
 import os
 import pathlib
+import shutil
 import subprocess
 import sys
-import shutil
 
 from dotenv import dotenv_values, load_dotenv
 
@@ -265,7 +265,13 @@ def main() -> int:
         if args.command is None:
             return menu(args.users_file, host)
         if args.command == "add":
-            add(args.users_file, host, name=args.name or "", athlete_id=args.athlete_id or "", api_key=args.api_key or "")
+            add(
+                args.users_file,
+                host,
+                name=args.name or "",
+                athlete_id=args.athlete_id or "",
+                api_key=args.api_key or "",
+            )
         elif args.command == "list":
             list_users(args.users_file)
         elif args.command == "show":

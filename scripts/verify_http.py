@@ -20,41 +20,40 @@ async def run(base_url: str, token: str) -> int:
     endpoint = f"{base_url.rstrip('/')}/{token}/mcp"
     print(f"connecting to {base_url.rstrip('/')}/<token>/mcp\n")
 
-    async with streamable_http_client(endpoint) as (read, write):
-        async with ClientSession(read, write) as session:
-            init = await session.initialize()
-            print(f"server:   {init.server_info.name} v{init.server_info.version}")
-            print(f"protocol: {init.protocol_version}")
+    async with streamable_http_client(endpoint) as (read, write), ClientSession(read, write) as session:
+        init = await session.initialize()
+        print(f"server:   {init.server_info.name} v{init.server_info.version}")
+        print(f"protocol: {init.protocol_version}")
 
-            tools = (await session.list_tools()).tools
-            print(f"tools:    {len(tools)}")
-            for tool in tools:
-                print(f"            - {tool.name}")
+        tools = (await session.list_tools()).tools
+        print(f"tools:    {len(tools)}")
+        for tool in tools:
+            print(f"            - {tool.name}")
 
-            print("\ncalling tools against live data:")
-            calls = [
-                ("get_athlete_profile", {}),
-                ("get_sport_settings", {}),
-                ("list_activities", {"oldest": "-14d", "limit": 3}),
-                ("get_wellness", {"oldest": "-5d"}),
-                ("get_best_efforts", {"kind": "pace", "sport_type": "Run"}),
-                ("get_events", {}),
-            ]
-            failures = []
-            for name, args in calls:
-                result = await session.call_tool(name, args)
-                text = result.content[0].text if result.content else ""
-                if result.is_error:
-                    failures.append((name, text[:120]))
-                    print(f"  {name:22s} ERROR {text[:80]}")
-                else:
-                    print(f"  {name:22s} ok, {len(text):,} chars  {text[:70]}...")
+        print("\ncalling tools against live data:")
+        calls = [
+            ("get_athlete_profile", {}),
+            ("get_sport_settings", {}),
+            ("list_activities", {"oldest": "-14d", "limit": 3}),
+            ("get_wellness", {"oldest": "-5d"}),
+            ("get_best_efforts", {"kind": "pace", "sport_type": "Run"}),
+            ("get_events", {}),
+        ]
+        failures = []
+        for name, args in calls:
+            result = await session.call_tool(name, args)
+            text = result.content[0].text if result.content else ""
+            if result.is_error:
+                failures.append((name, text[:120]))
+                print(f"  {name:22s} ERROR {text[:80]}")
+            else:
+                print(f"  {name:22s} ok, {len(text):,} chars  {text[:70]}...")
 
-            if failures:
-                print(f"\n{len(failures)} call(s) failed")
-                return 1
-            print(f"\nall {len(calls)} calls succeeded over HTTP")
-            return 0
+        if failures:
+            print(f"\n{len(failures)} call(s) failed")
+            return 1
+        print(f"\nall {len(calls)} calls succeeded over HTTP")
+        return 0
 
 
 def main() -> int:
