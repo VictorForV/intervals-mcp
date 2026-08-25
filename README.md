@@ -19,6 +19,8 @@ in an athlete's Intervals.icu account.
 - Athlete profile, timezone, sport settings, zones, FTP, LTHR, and max HR.
 - Activities, details, laps, intervals, and downsampled streams.
 - Wellness, fitness, fatigue, HRV, sleep, mood, and weight when available.
+- A coach-style training readiness assessment: form (TSB) classified into a
+  band, a ramp-rate read, and whether recent HRV has dropped below baseline.
 - Planned events, best-effort curves, gear, and the workout library.
 - Additional Intervals.icu v1 `GET` endpoints through a read-only raw tool.
 

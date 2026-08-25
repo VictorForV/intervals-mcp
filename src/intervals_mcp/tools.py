@@ -8,7 +8,7 @@ import datetime
 from collections.abc import Callable
 from typing import Any
 
-from . import compact, dates
+from . import analytics, compact, dates
 from .client import IntervalsClient
 
 CURVE_ENDPOINTS = {"hr": "hr-curves", "pace": "pace-curves", "power": "power-curves"}
@@ -114,6 +114,15 @@ class IntervalsTools:
             "window": {"oldest": start, "newest": end},
             "days": compact.compact_wellness(raw),
         }
+
+    def get_training_readiness(self, oldest: str | None = None, newest: str | None = None) -> dict:
+        # A six-week default gives the HRV comparison a real baseline (the
+        # last 7 days against everything older) rather than just a day or two.
+        start, end = self._window(oldest, newest, default_oldest="-42d")
+        raw = self._client.athlete_get("wellness", {"oldest": start, "newest": end})
+        result = analytics.assess_readiness(raw)
+        result["window"] = {"oldest": start, "newest": end}
+        return result
 
     def get_events(self, oldest: str | None = None, newest: str | None = None) -> dict:
         # Events are plans, so the useful default window looks forward.

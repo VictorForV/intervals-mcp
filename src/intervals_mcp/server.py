@@ -35,6 +35,9 @@ planned calendar entries, best-effort curves, and zone settings.
 Use it to reason like a coach. Start with get_athlete_profile and
 get_sport_settings for zones and FTP, get_wellness for fitness (CTL), fatigue
 (ATL) and ramp rate, and list_activities for what was actually done.
+get_training_readiness turns CTL/ATL/ramp rate and recent HRV into the
+qualitative read a coach would give -- fresh, overreaching, high risk -- so
+that read does not have to be inferred from raw numbers.
 
 Date arguments are optional everywhere. They accept ISO dates (2026-08-01) and
 relative forms (today, -7d, -6w, -3m, -1y, +28d). Omit them to get sensible
@@ -177,6 +180,21 @@ def build_server(tools: IntervalsTools | None = None) -> MCPServer:
         to read before judging whether load is sustainable.
         """
         return tools.get_wellness(oldest=oldest, newest=newest)
+
+    @mcp.tool()
+    @guard
+    def get_training_readiness(oldest: str | None = None, newest: str | None = None) -> dict:
+        """Assess current form from CTL/ATL/ramp rate and recent HRV, coach-style.
+
+        Defaults to a six-week window so recent HRV has a real baseline to
+        compare against. Returns TSB (fitness minus fatigue) classified into a
+        band -- high_risk, overreaching, neutral, fresh, very_fresh -- each
+        with a plain-language note, plus a ramp-rate read (declining,
+        maintaining, building, aggressive) and, when HRV is logged, the last
+        7 days against the rest of the window with a flag if it has dropped
+        more than 10% below baseline.
+        """
+        return tools.get_training_readiness(oldest=oldest, newest=newest)
 
     @mcp.tool()
     @guard

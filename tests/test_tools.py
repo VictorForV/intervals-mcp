@@ -210,6 +210,53 @@ class TestWellness:
         assert "sleepScore" not in result["days"][0]
 
 
+class TestTrainingReadiness:
+    @respx.mock
+    def test_defaults_to_a_six_week_window(self, tools):
+        route = respx.get(f"{BASE}/athlete/{ATHLETE}/wellness").mock(
+            return_value=httpx.Response(200, json=[])
+        )
+
+        result = tools.get_training_readiness()
+
+        assert route.calls.last.request.url.params["oldest"] == "2026-06-29"
+        assert result["window"] == {"oldest": "2026-06-29", "newest": "2026-08-10"}
+
+    @respx.mock
+    def test_assesses_form_from_the_latest_day(self, tools):
+        respx.get(f"{BASE}/athlete/{ATHLETE}/wellness").mock(
+            return_value=httpx.Response(200, json=fixture("wellness"))
+        )
+
+        result = tools.get_training_readiness()
+
+        assert result["as_of"] == "2024-01-30"
+        assert result["tsb"] == 4.2
+        assert result["form"] == "neutral"
+        assert result["ramp"] == "maintaining"
+
+    @respx.mock
+    def test_reports_no_hrv_deviation_when_it_has_not_moved(self, tools):
+        respx.get(f"{BASE}/athlete/{ATHLETE}/wellness").mock(
+            return_value=httpx.Response(200, json=fixture("wellness"))
+        )
+
+        result = tools.get_training_readiness()
+
+        assert result["hrv"]["pct_change"] == 0.0
+        assert result["hrv"]["below_baseline"] is False
+
+    @respx.mock
+    def test_errors_when_the_window_has_no_usable_data(self, tools):
+        respx.get(f"{BASE}/athlete/{ATHLETE}/wellness").mock(
+            return_value=httpx.Response(200, json=[])
+        )
+
+        result = tools.get_training_readiness()
+
+        assert "error" in result
+
+
 class TestEvents:
     @respx.mock
     def test_looks_forward_by_default_because_events_are_plans(self, tools):

@@ -22,6 +22,7 @@ EXPECTED_TOOLS = {
     "get_activity_intervals",
     "get_activity_streams",
     "get_wellness",
+    "get_training_readiness",
     "get_events",
     "get_best_efforts",
     "get_gear",
