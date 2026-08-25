@@ -12,6 +12,10 @@ wheels/
 # Secrets
 .env
 
+# Per-deployment overrides (network topology, reverse proxy specifics): never
+# meant to leave the host they were written for.
+docker-compose.override.yml
+
 # Test artifacts
 .pytest_cache/
 users.toml
