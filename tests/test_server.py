@@ -28,6 +28,7 @@ EXPECTED_TOOLS = {
     "get_training_load_chart",
     "get_events",
     "get_best_efforts",
+    "get_best_effort_chart",
     "get_gear",
     "list_workouts",
     "intervals_get_raw",

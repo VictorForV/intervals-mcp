@@ -21,8 +21,8 @@ in an athlete's Intervals.icu account.
 - Wellness, fitness, fatigue, HRV, sleep, mood, and weight when available.
 - A coach-style training readiness assessment: form (TSB) classified into a
   band, a ramp-rate read, and whether recent HRV has dropped below baseline.
-- A PNG chart of CTL/ATL/TSB over time, for when the shape of the curve says
-  more than the numbers.
+- PNG charts: CTL/ATL/TSB over time, and best-effort curves (HR, pace, power)
+  by duration or distance -- for when the shape says more than the numbers.
 - Planned events, best-effort curves, gear, and the workout library.
 - Additional Intervals.icu v1 `GET` endpoints through a read-only raw tool.
 

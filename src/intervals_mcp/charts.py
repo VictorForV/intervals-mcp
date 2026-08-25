@@ -1,17 +1,20 @@
-"""Render training-load history as a PNG line chart.
+"""Render training-load history and best-effort curves as PNG line charts.
 
-A coaching conversation benefits from seeing the CTL/ATL/TSB curve, not just
-reading the numbers off a table -- a shape ("ATL spiked, CTL kept climbing")
-often makes the point a table of numbers takes several sentences to make.
-Pillow draws directly onto a pixel canvas here; there is no numpy or
-matplotlib dependency to keep the image lean.
+A coaching conversation benefits from seeing a shape, not just reading the
+numbers off a table -- a shape ("ATL spiked, CTL kept climbing", "the power
+curve fell off past 20 minutes") often makes the point a table of numbers
+takes several sentences to make. Pillow draws directly onto a pixel canvas
+here; there is no numpy or matplotlib dependency to keep the image lean.
 """
 
 import io
-from collections.abc import Sequence
+import math
+from collections.abc import Callable, Sequence
 
 from PIL import Image as PILImage
 from PIL import ImageDraw, ImageFont
+
+from .compact import CURVE_DISTANCES, CURVE_DURATIONS, format_duration
 
 WIDTH, HEIGHT = 900, 420
 MARGIN_LEFT, MARGIN_RIGHT, MARGIN_TOP, MARGIN_BOTTOM = 60, 20, 30, 40
@@ -20,41 +23,52 @@ BACKGROUND = (255, 255, 255)
 AXIS = (120, 120, 120)
 GRID = (230, 230, 230)
 TEXT = (60, 60, 60)
-SERIES_COLORS = {
-    "ctl": (66, 133, 244),  # fitness
-    "atl": (219, 68, 55),  # fatigue
-    "tsb": (15, 157, 88),  # form
-}
+PALETTE = [
+    (66, 133, 244),
+    (219, 68, 55),
+    (15, 157, 88),
+    (244, 160, 0),
+]
 Y_GRIDLINES = 5
 
 
-def _scale(value: float, lo: float, hi: float, top: float, bottom: float) -> float:
+def _scale(value: float, lo: float, hi: float, near: float, far: float) -> float:
+    """Map ``value`` from the data range [lo, hi] to the pixel range [near, far]."""
     if hi == lo:
-        return bottom
-    fraction = (value - lo) / (hi - lo)
-    return bottom - fraction * (bottom - top)
+        return (near + far) / 2
+    return near + (value - lo) / (hi - lo) * (far - near)
 
 
-def render_pmc_chart(days: Sequence[dict], title: str = "Training load (CTL / ATL / TSB)") -> bytes:
-    """Render CTL, ATL and derived TSB over time as a PNG.
+def _padded_range(values: Sequence[float]) -> tuple[float, float]:
+    lo, hi = min(values), max(values)
+    pad = (hi - lo) * 0.1 or (abs(hi) * 0.1 or 1.0)
+    return lo - pad, hi + pad
 
-    ``days`` must carry ``id`` (a date string), ``ctl`` and ``atl``; days
-    missing either number are skipped. Raises ``ValueError`` if nothing is
-    left to plot.
+
+def _render_line_chart(
+    series: dict[str, list[tuple[float, float]]],
+    x_ticks: Sequence[tuple[float, str]],
+    title: str,
+    y_format: Callable[[float], str] = lambda v: f"{v:.0f}",
+) -> bytes:
+    """Draw one or more (x, y) series onto a common canvas and return PNG bytes.
+
+    ``x`` values are already in plot space -- callers decide whether that is
+    a day index, a raw duration, or a log-scaled one. ``x_ticks`` places the
+    bottom-axis labels independently of the series data, since a curve chart
+    wants ticks at conventional durations (5s, 1m, 1h) rather than at every
+    sampled point.
     """
-    points = [d for d in days if d.get("ctl") is not None and d.get("atl") is not None]
-    if not points:
-        raise ValueError("No days with both ctl and atl to chart.")
+    all_points = [point for points in series.values() for point in points]
+    if not all_points:
+        raise ValueError("Nothing to plot.")
 
-    series = {
-        "ctl": [d["ctl"] for d in points],
-        "atl": [d["atl"] for d in points],
-        "tsb": [d["ctl"] - d["atl"] for d in points],
-    }
-    all_values = [v for values in series.values() for v in values]
-    lo, hi = min(all_values), max(all_values)
-    pad = (hi - lo) * 0.1 or 1.0
-    lo, hi = lo - pad, hi + pad
+    xs = [x for x, _ in all_points]
+    ys = [y for _, y in all_points]
+    x_lo, x_hi = min(xs), max(xs)
+    if x_hi == x_lo:
+        x_lo, x_hi = x_lo - 1, x_hi + 1
+    y_lo, y_hi = _padded_range(ys)
 
     image = PILImage.new("RGB", (WIDTH, HEIGHT), BACKGROUND)
     draw = ImageDraw.Draw(image)
@@ -68,35 +82,35 @@ def render_pmc_chart(days: Sequence[dict], title: str = "Training load (CTL / AT
     for i in range(Y_GRIDLINES):
         fraction = i / (Y_GRIDLINES - 1)
         y = plot_bottom - fraction * (plot_bottom - plot_top)
-        value = lo + fraction * (hi - lo)
+        value = y_lo + fraction * (y_hi - y_lo)
         draw.line([(plot_left, y), (plot_right, y)], fill=GRID)
-        draw.text((4, y - 6), f"{value:.0f}", fill=TEXT, font=font)
+        draw.text((4, y - 6), y_format(value), fill=TEXT, font=font)
 
     draw.line([(plot_left, plot_top), (plot_left, plot_bottom)], fill=AXIS)
     draw.line([(plot_left, plot_bottom), (plot_right, plot_bottom)], fill=AXIS)
 
-    point_count = len(points)
+    def point_px(x: float, y: float) -> tuple[float, float]:
+        return (
+            _scale(x, x_lo, x_hi, plot_left, plot_right),
+            _scale(y, y_lo, y_hi, plot_bottom, plot_top),
+        )
 
-    def x_at(index: int) -> float:
-        if point_count == 1:
-            return (plot_left + plot_right) / 2
-        return plot_left + index * (plot_right - plot_left) / (point_count - 1)
-
-    for name, values in series.items():
-        color = SERIES_COLORS[name]
-        coords = [(x_at(i), _scale(v, lo, hi, plot_top, plot_bottom)) for i, v in enumerate(values)]
-        if len(coords) > 1:
-            draw.line(coords, fill=color, width=2)
+    for (_name, points), color in zip(series.items(), PALETTE, strict=False):
+        pixels = [point_px(x, y) for x, y in points]
+        if len(pixels) > 1:
+            draw.line(pixels, fill=color, width=2)
         else:
-            x, y = coords[0]
-            draw.ellipse([x - 2, y - 2, x + 2, y + 2], fill=color)
+            px, py = pixels[0]
+            draw.ellipse([px - 2, py - 2, px + 2, py + 2], fill=color)
 
-    for index in sorted({0, point_count // 2, point_count - 1}):
-        date = str(points[index].get("id", ""))
-        draw.text((x_at(index) - 20, plot_bottom + 6), date, fill=TEXT, font=font)
+    for x_value, label in x_ticks:
+        if not (x_lo <= x_value <= x_hi):
+            continue
+        px, _ = point_px(x_value, y_lo)
+        draw.text((px - len(label) * 3, plot_bottom + 6), label, fill=TEXT, font=font)
 
     legend_x = plot_right - 150
-    for row, (name, color) in enumerate(SERIES_COLORS.items()):
+    for row, ((name, _points), color) in enumerate(zip(series.items(), PALETTE, strict=False)):
         y = MARGIN_TOP + row * 14
         draw.line([(legend_x, y + 5), (legend_x + 16, y + 5)], fill=color, width=3)
         draw.text((legend_x + 22, y), name.upper(), fill=TEXT, font=font)
@@ -104,3 +118,69 @@ def render_pmc_chart(days: Sequence[dict], title: str = "Training load (CTL / AT
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
     return buffer.getvalue()
+
+
+def render_pmc_chart(days: Sequence[dict], title: str = "Training load (CTL / ATL / TSB)") -> bytes:
+    """Render CTL, ATL and derived TSB over time as a PNG.
+
+    ``days`` must carry ``id`` (a date string), ``ctl`` and ``atl``; days
+    missing either number are skipped. Raises ``ValueError`` if nothing is
+    left to plot.
+    """
+    points = [d for d in days if d.get("ctl") is not None and d.get("atl") is not None]
+    if not points:
+        raise ValueError("No days with both ctl and atl to chart.")
+
+    indexed = list(enumerate(points))
+    series = {
+        "ctl": [(i, d["ctl"]) for i, d in indexed],
+        "atl": [(i, d["atl"]) for i, d in indexed],
+        "tsb": [(i, d["ctl"] - d["atl"]) for i, d in indexed],
+    }
+
+    last = len(points) - 1
+    tick_positions = sorted({0, last // 2, last})
+    x_ticks = [(i, str(points[i].get("id", ""))) for i in tick_positions]
+
+    return _render_line_chart(series, x_ticks, title)
+
+
+def render_curve_chart(curve: dict, kind: str, title: str | None = None) -> bytes:
+    """Render one best-effort curve (HR, power or pace) as a PNG.
+
+    ``curve`` is one entry from a curve payload's ``list``: it carries either
+    ``secs`` (duration curves -- HR, power) or ``distance`` (pace curves)
+    alongside parallel ``values``. The x-axis is log-scaled, since a best-
+    effort curve spans three or four orders of magnitude (1 second to 90
+    minutes) and a linear axis would crush the short end into a sliver.
+    """
+    xs_raw = curve.get("secs") or curve.get("distance")
+    if not xs_raw:
+        raise ValueError("Curve has neither 'secs' nor 'distance' to plot.")
+    by_duration = bool(curve.get("secs"))
+
+    values = curve.get("values") or []
+    pairs = sorted(
+        (x, v) for x, v in zip(xs_raw, values, strict=False) if x and v is not None
+    )
+    if not pairs:
+        raise ValueError("Curve has no plottable points.")
+
+    series = {kind: [(math.log10(x), v) for x, v in pairs]}
+
+    reference = CURVE_DURATIONS if by_duration else CURVE_DISTANCES
+    x_min, x_max = pairs[0][0], pairs[-1][0]
+    x_ticks = [
+        (math.log10(value), label)
+        for value, label in reference
+        if x_min <= value <= x_max
+    ]
+
+    if title is None:
+        unit = "duration" if by_duration else "distance"
+        title = f"{curve.get('label', kind)} {kind} curve by {unit}"
+
+    # Pace curves store seconds elapsed; a coach reads m:ss, not raw seconds.
+    y_format = format_duration if kind == "pace" else (lambda v: f"{v:.0f}")
+
+    return _render_line_chart(series, x_ticks, title, y_format=y_format)

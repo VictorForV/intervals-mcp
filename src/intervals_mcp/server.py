@@ -40,7 +40,8 @@ get_training_readiness turns CTL/ATL/ramp rate and recent HRV into the
 qualitative read a coach would give -- fresh, overreaching, high risk -- so
 that read does not have to be inferred from raw numbers. get_training_load_chart
 renders the same CTL/ATL/TSB history as a PNG when the shape of the curve
-matters more than the numbers.
+matters more than the numbers, and get_best_effort_chart does the same for a
+best-effort curve from get_best_efforts.
 
 Date arguments are optional everywhere. They accept ISO dates (2026-08-01) and
 relative forms (today, -7d, -6w, -3m, -1y, +28d). Omit them to get sensible
@@ -236,6 +237,28 @@ def build_server(tools: IntervalsTools | None = None) -> MCPServer:
         """
         return tools.get_best_efforts(
             kind=kind, sport_type=sport_type, oldest=oldest, newest=newest
+        )
+
+    @mcp.tool()
+    @guard
+    def get_best_effort_chart(
+        kind: str,
+        sport_type: str = "Run",
+        oldest: str | None = None,
+        newest: str | None = None,
+    ) -> Image:
+        """A PNG of the best-effort curve for a sport: HR, pace or power against
+        duration or distance, log-scaled since a curve spans seconds to hours.
+
+        kind is hr, pace or power, same as get_best_efforts. Use this when the
+        shape of the curve -- a plateau, a cliff past some duration -- says
+        more than the ten named points get_best_efforts returns.
+        """
+        return Image(
+            data=tools.get_best_effort_chart(
+                kind=kind, sport_type=sport_type, oldest=oldest, newest=newest
+            ),
+            format="png",
         )
 
     @mcp.tool()

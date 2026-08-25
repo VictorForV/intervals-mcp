@@ -142,13 +142,9 @@ class IntervalsTools:
             "events": compact.compact_events(raw),
         }
 
-    def get_best_efforts(
-        self,
-        kind: str,
-        sport_type: str = "Run",
-        oldest: str | None = None,
-        newest: str | None = None,
-    ) -> dict:
+    def _fetch_curve(
+        self, kind: str, sport_type: str, oldest: str | None, newest: str | None
+    ) -> tuple[dict, str, str]:
         endpoint = CURVE_ENDPOINTS.get(kind.strip().lower())
         if not endpoint:
             raise ValueError(
@@ -158,10 +154,34 @@ class IntervalsTools:
         raw = self._client.athlete_get(
             endpoint, {"type": sport_type, "oldest": start, "newest": end}
         )
+        return raw, start, end
+
+    def get_best_efforts(
+        self,
+        kind: str,
+        sport_type: str = "Run",
+        oldest: str | None = None,
+        newest: str | None = None,
+    ) -> dict:
+        raw, start, end = self._fetch_curve(kind, sport_type, oldest, newest)
         result = compact.compact_curves(raw)
         result["window"] = {"oldest": start, "newest": end}
         result["sport_type"] = sport_type
         return result
+
+    def get_best_effort_chart(
+        self,
+        kind: str,
+        sport_type: str = "Run",
+        oldest: str | None = None,
+        newest: str | None = None,
+    ) -> bytes:
+        raw, start, end = self._fetch_curve(kind, sport_type, oldest, newest)
+        curves = raw.get("list") or []
+        if not curves:
+            raise ValueError(f"No {kind} curve data for {sport_type} in this window.")
+        title = f"{sport_type} {kind} curve ({start} to {end})"
+        return charts.render_curve_chart(curves[0], kind=kind, title=title)
 
     # --- escape hatch ----------------------------------------------------
 

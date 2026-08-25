@@ -347,6 +347,41 @@ class TestBestEfforts:
         assert route.calls.last.request.url.params["oldest"] == "2025-08-10"
 
 
+class TestBestEffortChart:
+    @respx.mock
+    def test_returns_png_bytes_for_the_first_curve(self, tools):
+        respx.get(f"{BASE}/athlete/{ATHLETE}/hr-curves").mock(
+            return_value=httpx.Response(200, json=fixture("hr_curves"))
+        )
+
+        result = tools.get_best_effort_chart(kind="hr", sport_type="Run")
+
+        assert result[:8] == b"\x89PNG\r\n\x1a\n"
+
+    @respx.mock
+    def test_works_for_a_distance_indexed_pace_curve(self, tools):
+        respx.get(f"{BASE}/athlete/{ATHLETE}/pace-curves").mock(
+            return_value=httpx.Response(200, json=fixture("pace_curves"))
+        )
+
+        result = tools.get_best_effort_chart(kind="pace", sport_type="Run")
+
+        assert result[:8] == b"\x89PNG\r\n\x1a\n"
+
+    def test_rejects_an_unknown_kind_before_making_a_request(self, tools):
+        with pytest.raises(ValueError, match="cadence"):
+            tools.get_best_effort_chart(kind="cadence", sport_type="Run")
+
+    @respx.mock
+    def test_raises_when_the_curve_list_is_empty(self, tools):
+        respx.get(f"{BASE}/athlete/{ATHLETE}/hr-curves").mock(
+            return_value=httpx.Response(200, json={"list": []})
+        )
+
+        with pytest.raises(ValueError, match="No hr curve data"):
+            tools.get_best_effort_chart(kind="hr", sport_type="Run")
+
+
 class TestSmallReads:
     @respx.mock
     def test_profile_is_flattened(self, tools):
