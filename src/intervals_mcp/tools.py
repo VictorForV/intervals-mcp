@@ -61,6 +61,9 @@ class IntervalsTools:
         limit: int = 50,
         activity_type: str | None = None,
     ) -> dict:
+        if limit < 0:
+            raise ValueError(f"limit must be zero or positive, got {limit}.")
+
         start, end = self._window(oldest, newest, default_oldest="-30d")
         raw = self._client.athlete_get(
             "activities", {"oldest": start, "newest": end}
@@ -74,7 +77,11 @@ class IntervalsTools:
         # The API returns newest first; sort defensively so truncation keeps
         # the most recent sessions rather than whatever order arrived.
         raw = sorted(raw, key=lambda a: a.get("start_date_local") or "", reverse=True)
-        shown = raw[:limit] if limit else raw
+        # limit is validated non-negative above, so this slices to exactly
+        # `limit` items -- including correctly returning none for limit=0.
+        # (The previous `raw[:limit] if limit else raw` treated 0 as falsy
+        # and silently returned everything instead.)
+        shown = raw[:limit]
 
         result = {
             "window": {"oldest": start, "newest": end},

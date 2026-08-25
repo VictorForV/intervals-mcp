@@ -130,6 +130,24 @@ class TestListActivities:
 
         assert result["activities"][0]["id"] == "newest"
 
+    @respx.mock
+    def test_limit_zero_returns_no_activities_rather_than_everything(self, tools):
+        # limit=0 is falsy in Python; a naive `raw[:limit] if limit else raw`
+        # silently ignores the caller's limit and returns everything instead.
+        respx.get(f"{BASE}/athlete/{ATHLETE}/activities").mock(
+            return_value=httpx.Response(200, json=[{"id": "a", "type": "Run"}])
+        )
+
+        result = tools.list_activities(limit=0)
+
+        assert result["matched"] == 1
+        assert result["returned"] == 0
+        assert result["activities"] == []
+
+    def test_rejects_a_negative_limit(self, tools):
+        with pytest.raises(ValueError, match="limit"):
+            tools.list_activities(limit=-5)
+
 
 class TestActivityDetail:
     @respx.mock
