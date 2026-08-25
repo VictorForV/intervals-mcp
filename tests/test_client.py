@@ -313,3 +313,37 @@ class TestRawPathCannotEscapeTheApi:
             client.get("https://attacker.example/collect")
 
         assert captured == {}
+
+    def test_rejects_dot_dot_climbing_out_of_v1(self, client):
+        # httpx resolves ".." like any RFC 3986 client: "../athlete/i123"
+        # against .../api/v1 lands on .../api/athlete/i123 -- still
+        # intervals.icu, but outside the namespace this client is confined to.
+        with pytest.raises(IntervalsError) as excinfo:
+            client.get("../athlete/i123")
+
+        assert "must stay under" in str(excinfo.value)
+
+    def test_rejects_dot_dot_deep_enough_to_leave_the_api_entirely(self, client):
+        with pytest.raises(IntervalsError):
+            client.get("../../../etc/passwd")
+
+    def test_rejects_dot_dot_after_a_legitimate_looking_prefix(self, client):
+        with pytest.raises(IntervalsError):
+            client.get("activity/123/../../athlete/i123")
+
+    def test_rejects_percent_encoded_dot_dot(self, client):
+        # Not resolved by httpx (it stays a literal "%2e%2e" segment to us),
+        # but intervals.icu's own routing might decode it -- reject before
+        # ever sending it.
+        with pytest.raises(IntervalsError):
+            client.get("%2e%2e/athlete/i123")
+
+    def test_rejects_a_backslash(self, client):
+        with pytest.raises(IntervalsError):
+            client.get("activity\\..\\athlete\\i123")
+
+    @respx.mock
+    def test_a_plain_relative_path_is_unaffected(self, client):
+        respx.get(f"{BASE}/athlete/i123/profile").mock(return_value=httpx.Response(200, json={}))
+
+        assert client.get("athlete/i123/profile") == {}

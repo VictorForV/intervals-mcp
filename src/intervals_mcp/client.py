@@ -6,6 +6,7 @@ looks natural, fails with 401 — hence the explicit message on that path.
 """
 
 import time
+import urllib.parse
 from collections.abc import Callable
 from typing import Any
 
@@ -67,6 +68,17 @@ class IntervalsClient:
         """GET a path under the configured athlete, e.g. ``wellness``."""
         return self.get(f"athlete/{self.athlete_id}/{suffix.lstrip('/')}", params)
 
+    def _escapes_base(self, path: str) -> bool:
+        """True if ``path`` would resolve outside ``BASE_URL``, directly or
+        via ``..``/backslash traversal that only decodes to that once it
+        reaches a server willing to normalise it (ours will not, but
+        intervals.icu's own routing might)."""
+        decoded = urllib.parse.unquote(path)
+        if "\\" in decoded or ".." in decoded.split("/"):
+            return True
+        resolved = self._client.build_request("GET", path).url
+        return not str(resolved).startswith(f"{BASE_URL}/")
+
     def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
         path = path.lstrip("/")
         if "?" in path or "#" in path:
@@ -81,6 +93,12 @@ class IntervalsClient:
             raise IntervalsError(
                 f"Invalid path {path!r}: must be relative to {BASE_URL}, not an absolute URL."
             )
+        if self._escapes_base(path):
+            # httpx resolves ".." during URL merging like any RFC 3986 client,
+            # so "../athlete/i123" against .../api/v1 lands on .../api/athlete/i123
+            # -- still intervals.icu, but outside the v1 namespace this client
+            # is meant to be confined to.
+            raise IntervalsError(f"Invalid path {path!r}: must stay under {BASE_URL}.")
 
         clean = {k: v for k, v in (params or {}).items() if v is not None}
         cache_key = (path, tuple(sorted(clean.items())))
